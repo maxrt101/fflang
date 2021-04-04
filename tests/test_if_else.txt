@@ -1,0 +1,13 @@
+const a = 40;
+
+if (a == 40) {
+  print "a == 40";
+}
+
+if (a == 20) {
+  print "a == 20";
+} else {
+  print "a != 20";
+}
+
+
