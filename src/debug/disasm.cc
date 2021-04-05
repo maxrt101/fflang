@@ -55,6 +55,7 @@ int debug::DisassembleInstruction(const Chunk& chunk, int offset) {
     case OP_RETURN:             return SimpleInstruction("OP_RETURN", offset);
     case OP_JUMP:               return JumpInstruction("OP_JUMP", 1, chunk, offset);
     case OP_JUMP_IF_FALSE:      return JumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
+    case OP_LOOP:               return JumpInstruction("OP_LOOP", -1, chunk, offset);
     case OP_PRINT:              return SimpleInstruction("OP_PRINT", offset);
     case OP_CONSTANT:           return ConstantInstruction("OP_CONSTANT", chunk, offset);
     case OP_CONSTANT_LONG:      return ConstantLongInstruction("OP_CONSTANT_LONG", chunk, offset);

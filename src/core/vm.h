@@ -36,24 +36,14 @@ class VM {
  private:
   inline uint8_t ReadByte() { return *ip_++; }
   uint16_t ReadShort();
+  
   inline Value ReadConstant() { return chunk_->constants[ReadByte()]; }
   Value ReadConstantLong();
 
-  inline void ResetStack() { stack_top_ = stack_; }
-  
-  inline void Push(Value value) {
-    *stack_top_ = value;
-    stack_top_++;
-  }
-  
-  inline Value Pop() {
-    stack_top_--;
-    return *stack_top_;
-  }
-
-  inline Value Peek(int distance) const {
-    return stack_top_[-1 - distance];
-  }
+  inline void ResetStack()              { stack_top_ = stack_; }
+  inline void Push(Value value)         { *stack_top_ = value; stack_top_++; }
+  inline Value Pop()                    { stack_top_--; return *stack_top_; }
+  inline Value Peek(int distance) const { return stack_top_[-1 - distance]; }
 
   void RuntimeError(const char* fmt, ...);
 

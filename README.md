@@ -18,10 +18,10 @@ ff supports REPL mode as well as passing a source file.
  - [X] Constants, declared with `const` keyword.
  - [X] `print` statement.
  - [X] `If/else`.
- - [ ] `and` and `or` operators.
- - [ ] `while` statement.
- - [ ] `for` statement.
- - [ ] `break` and `continue` keywords.
+ - [X] `and` and `or` operators.
+ - [X] `while` statement.
+ - [X] `for` statement.
+ - [X] `break` and `continue` keywords.
  - [ ] Functions, declared with `fn` keyword.
  - [ ] Native functions with suitable api.
  - [ ] Anonimous functions (lambdas)

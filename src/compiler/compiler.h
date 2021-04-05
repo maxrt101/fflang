@@ -1,6 +1,7 @@
 #ifndef FF_COMPILER_COMPILER_H_
 #define FF_COMPILER_COMPILER_H_
 
+#include <vector>
 #include <string>
 
 #include "core/chunk.h"
@@ -18,6 +19,7 @@ enum Precedence{
   PREC_FACTOR,      // * /
   PREC_UNARY,       // ! -
   PREC_CALL,        // . ()
+  // PREC_LAMBDA,      // fn() {}
   PREC_PRIMARY
 };
 
@@ -38,6 +40,10 @@ struct CompilerState {
 
 struct ParseRule;
 
+struct LoopRecord {
+  std::vector<int> start_jump;
+  std::vector<int> end_jump;
+};
 
 class Compiler {
  private:
@@ -47,6 +53,7 @@ class Compiler {
   bool had_error_;
   bool panic_mode_;
   Chunk* current_chunk_;
+  std::vector<LoopRecord> loops_;
 
  public:
   Compiler(std::string& source);
@@ -68,6 +75,8 @@ class Compiler {
   void EmitReturn();
   int  EmitJump(uint8_t op);
   void PatchJump(int offset);
+  void EmitLoop(int loop_start);
+  void PatchRemoteJump(int loop, int offset);
 
   void EmitCheckLong(int val, uint8_t op, uint8_t long_op);
   void EmitConstant(Value value);
@@ -86,6 +95,10 @@ class Compiler {
 
   void BeginScope();
   void EndScope();
+
+  void BeginLoop();
+  void EndLoop();
+  LoopRecord& GetLoop(int nest = 0);
   
   void ParsePrecedence(Precedence precedence);
   ParseRule* GetRule(TokenType type);
@@ -98,6 +111,8 @@ class Compiler {
   void Literal(bool can_assign);
   void String(bool can_assign);
   void Variable(bool can_assign);
+  void And(bool can_assign);
+  void Or(bool can_assign);
  
  private:
   void Declaration();
@@ -108,6 +123,10 @@ class Compiler {
   void PrintStatement();
   void Block();
   void IfStatement();
+  void WhileStatement();
+  void ForStatement();
+  void BreakStatement();
+  void ContinueStatement();
 };
 
 typedef void (Compiler::*ParseFn)(bool);

@@ -261,6 +261,11 @@ InterpretResult VM::Run() {
         if (Peek(0).IsFalse()) ip_ += offset;
         break;
       }
+      case OP_LOOP: {
+        uint16_t offset = ReadShort();
+        ip_ -= offset;
+        break;
+      }
       case OP_PRINT: {
         Pop().Print();
         std::cout << std::endl;

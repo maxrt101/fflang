@@ -12,8 +12,8 @@
 
 static constexpr size_t kMaxLongConstant = math::ConstexprPow(2, 32);
 
-
 static CompilerState* current_state = nullptr;
+
 
 
 /** TODO: make const */
@@ -40,15 +40,15 @@ ParseRule rules[] = {
   [TOKEN_IDENTIFIER]    = {&Compiler::Variable, NULL,               PREC_NONE},
   [TOKEN_STRING]        = {&Compiler::String,   NULL,               PREC_NONE},
   [TOKEN_NUMBER]        = {&Compiler::Number,   NULL,               PREC_NONE},
-  [TOKEN_AND]           = {NULL,                NULL,               PREC_NONE},
+  [TOKEN_AND]           = {NULL,                &Compiler::And,     PREC_AND},
   [TOKEN_CLASS]         = {NULL,                NULL,               PREC_NONE},
   [TOKEN_ELSE]          = {NULL,                NULL,               PREC_NONE},
   [TOKEN_FALSE]         = {&Compiler::Literal,  NULL,               PREC_NONE},
   [TOKEN_FOR]           = {NULL,                NULL,               PREC_NONE},
-  [TOKEN_FN]            = {NULL,                NULL,               PREC_NONE},
+  [TOKEN_FN]            = {NULL,                NULL,               PREC_NONE}, // &Compiler::Lambda, <PREC_CALL
   [TOKEN_IF]            = {NULL,                NULL,               PREC_NONE},
   [TOKEN_NULL]          = {&Compiler::Literal,  NULL,               PREC_NONE},
-  [TOKEN_OR]            = {NULL,                NULL,               PREC_NONE},
+  [TOKEN_OR]            = {NULL,                &Compiler::Or,      PREC_OR},
   [TOKEN_PRINT]         = {NULL,                NULL,               PREC_NONE},
   [TOKEN_RETURN]        = {NULL,                NULL,               PREC_NONE},
   [TOKEN_SUPER]         = {NULL,                NULL,               PREC_NONE},
@@ -190,6 +190,34 @@ void Compiler::PatchJump(int offset) {
 
   current_chunk_->code[offset] = data.u8[0]; //(jump >> 8) & 0xff;
   current_chunk_->code[offset+1] = data.u8[1]; //jump & 0xff;
+}
+
+
+void Compiler::EmitLoop(int loop_start) {
+  EmitByte(OP_LOOP);
+
+  int offset = current_chunk_->code.size() - loop_start + 2;
+  if (offset > UINT16_MAX) {
+    Error("Loop body too large");
+  }
+
+  abi::NumericData jump;
+  jump.u16[0] = offset;
+
+  EmitByte(jump.u8[0]);
+  EmitByte(jump.u8[1]);
+}
+
+
+void Compiler::PatchRemoteJump(int loop, int offset) {
+  if (offset > UINT16_MAX) {
+    Error("Too much code to jump over.");
+  }
+
+  abi::NumericData data;
+  data.u16[0] = offset;
+  current_chunk_->code[loop] = data.u8[0];
+  current_chunk_->code[loop+1] = data.u8[1];
 }
 
 
@@ -345,6 +373,21 @@ void Compiler::EndScope() {
 }
 
 
+void Compiler::BeginLoop() {
+  loops_.push_back(LoopRecord());
+}
+
+
+void Compiler::EndLoop() {
+  loops_.pop_back();
+}
+
+
+LoopRecord& Compiler::GetLoop(int nest) {
+  return loops_[loops_.size()-1 - nest];
+}
+
+
 void Compiler::ParsePrecedence(Precedence precedence) {
   Advance();
   ParseFn prefix_rule = GetRule(previous_.type)->prefix;
@@ -407,6 +450,14 @@ void Compiler::Statement() {
     EndScope();
   } else if (Match(TOKEN_IF)) {
     IfStatement();
+  } else if (Match(TOKEN_WHILE)) {
+    WhileStatement();
+  } else if (Match(TOKEN_FOR)) {
+    ForStatement();
+  } else if (Match(TOKEN_BREAK)) {
+    BreakStatement();
+  } else if (Match(TOKEN_CONTINUE)) {
+    ContinueStatement();
   } else if (Match(TOKEN_PRINT)) {
     PrintStatement();
   } else {
@@ -447,6 +498,117 @@ void Compiler::IfStatement() {
     Statement();
   }
   PatchJump(else_jump);
+}
+
+
+void Compiler::WhileStatement() {
+  int loop_start = current_chunk_->code.size();
+
+  Consume(TOKEN_LEFT_PAREN, "Expected '(' after 'while'.");
+  Expression();
+  Consume(TOKEN_RIGHT_PAREN, "Expexted ')' after condition.");
+
+  int exit_jump = EmitJump(OP_JUMP_IF_FALSE);
+
+  BeginLoop();
+  
+  EmitByte(OP_POP);
+  Statement();
+
+  EmitLoop(loop_start);
+
+  PatchJump(exit_jump);
+  EmitByte(OP_POP);
+
+  // Patch all 'continues'
+  for (int continue_jump : GetLoop().start_jump) {
+    PatchRemoteJump(continue_jump, loop_start);
+  }
+
+  // Patch all 'breaks'
+  for (int break_jump : GetLoop().end_jump) {
+    PatchJump(break_jump);
+  }
+
+  EndLoop();
+}
+
+
+void Compiler::ForStatement() {
+  BeginScope();
+
+  Consume(TOKEN_LEFT_PAREN, "Expected '(' after 'for'.");
+  
+  // Consume(TOKEN_SEMICOLON, "Expected ';' after 'for' initializer.");
+  if (Match(TOKEN_SEMICOLON)) {
+    // No initializer
+  } else if (Match(TOKEN_VAR)) {
+    VarDeclaration(true);
+  } else {
+    ExpressionStatement();
+  }
+
+  int loop_start = current_chunk_->code.size();
+
+  int exit_jump = -1;
+  if (!Match(TOKEN_SEMICOLON)) {
+    Expression();
+    Consume(TOKEN_SEMICOLON, "Expected ';' after 'for' condition.");
+  
+    exit_jump = EmitJump(OP_JUMP_IF_FALSE);
+    EmitByte(OP_POP); // Condition
+  }
+
+  if (!Match(TOKEN_RIGHT_PAREN)) {
+    int body_jump = EmitJump(OP_JUMP);
+    
+    int increment_start = current_chunk_->code.size();
+    Expression();
+    EmitByte(OP_POP);
+    Consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' increment.");
+  
+    EmitLoop(loop_start);
+    loop_start = increment_start;
+    PatchJump(body_jump);
+  }
+
+  BeginLoop();
+  Statement();
+
+  EmitLoop(loop_start);
+
+  if (exit_jump != -1) {
+    PatchJump(exit_jump);
+    EmitJump(OP_POP); // Condition
+  }
+
+  // Patch all 'continues'
+  for (int continue_jump : GetLoop().start_jump) {
+    PatchRemoteJump(continue_jump, loop_start);
+  }
+
+  // Patch all 'breaks'
+  for (int break_jump : GetLoop().end_jump) {
+    PatchJump(break_jump);
+  }
+  
+  EndLoop();
+  EndScope();
+}
+
+
+void Compiler::BreakStatement() {
+  // check for Number for nested break
+  Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
+  int jump = EmitJump(OP_JUMP);
+  GetLoop().end_jump.push_back(jump);
+}
+
+
+void Compiler::ContinueStatement() {
+  Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
+  int jump = EmitJump(OP_LOOP);
+  GetLoop().start_jump.push_back(jump);
 }
 
 
@@ -534,6 +696,28 @@ void Compiler::String(bool can_assign) {
 
 void Compiler::Variable(bool can_assign) {
   NamedVariable(previous_, can_assign);
+}
+
+
+void Compiler::And(bool can_assign) {
+  int end_jump = EmitJump(OP_JUMP_IF_FALSE);
+
+  EmitByte(OP_POP);
+  ParsePrecedence(PREC_AND);
+
+  PatchJump(end_jump);
+}
+
+
+void Compiler::Or(bool can_assign) {
+  int else_jump = EmitJump(OP_JUMP_IF_FALSE);
+  int end_jump = EmitJump(OP_JUMP);
+
+  PatchJump(else_jump);
+  EmitByte(OP_POP);
+
+  ParsePrecedence(PREC_OR);
+  PatchJump(end_jump);
 }
 
 

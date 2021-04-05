@@ -33,6 +33,7 @@ enum OpCode : uint8_t {
   OP_DIVIDE,
   OP_JUMP,
   OP_JUMP_IF_FALSE,
+  OP_LOOP,
   OP_PRINT,
   OP_RETURN,
 };

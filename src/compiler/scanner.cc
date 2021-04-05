@@ -121,13 +121,28 @@ Token Scanner::Identifier() {
 TokenType Scanner::IdentifierType() const {
   switch (start_[0]) {
     case 'a': return CheckKeyword(1, 2, "nd", TOKEN_AND);
+    case 'b': return CheckKeyword(1, 4, "reak", TOKEN_BREAK);
     case 'c': {
       if (current_ - start_ > 1) {
         switch (start_[1]) {
           case 'l': return CheckKeyword(2, 3, "ass", TOKEN_CLASS);
-          case 'o': return CheckKeyword(2, 3, "nst", TOKEN_CONST);
+          case 'o': {
+            if (current_ - start_ > 2) {
+              switch (start_[2]) {
+                case 'n': {
+                  if (current_ - start_ > 3) {
+                    switch (start_[3]) {
+                      case 's': return CheckKeyword(2, 2, "t", TOKEN_CONST);
+                      case 't': return CheckKeyword(2, 4, "inue", TOKEN_CONTINUE);
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       }
+      break;
     }
     case 'f': {
       if (current_ - start_ > 1) {
