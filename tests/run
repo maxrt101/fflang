@@ -1,0 +1,11 @@
+#!/bin/bash
+
+# Run from the parent directiry of tests
+# Ensure that that directory contains compiled ff
+
+for filename in tests/test_*.txt; do
+  echo $filename
+  ./ff $filename
+  echo -e "\n"
+done;
+
