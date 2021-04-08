@@ -13,9 +13,9 @@ FF supports `Null`, `Bool`, `Number` and `String` datatypes.
 `+`, `-`, `*`, `/` and `=` operators are supported.  
 Variable declaration is done with `var` keyword.  
 Consts are immutable variables. Declared with `const` keyword.  
-Typical `if/else` control structure is supported. Syntax is the same as in C, C++ or Java.  
+`if`/`else` control structures are supported. Syntax is the same as in C, C++ or Java.  
 `while` and `for` can be used. Syntax is the same as in C.  
-`break` and 'continue' are supported. Usage is the same as in C.  
+`break` and `continue` are supported. Usage is the same as in C.  
 User defined functions are supported. They can be defined with `fn` keyword.  
 
 ## Extending the capabilities
