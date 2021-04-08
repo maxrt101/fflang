@@ -5,8 +5,8 @@
 #include <vector>
 #include <cstdint>
 
-#include "core/object.h"
-
+struct Obj;
+struct ObjString;
 
 typedef double NumberType;
 
@@ -29,32 +29,19 @@ struct Value {
   } as;
 
  public:
-  inline Value(ValueType type = VAL_NULL) : type(type) {
-    as.number = 0;
-  }
-
-  inline Value(bool val) {
-    type = VAL_BOOL;
-    as.boolean = val;
-  }
-
-  inline Value(NumberType val) {
-    type = VAL_NUMBER;
-    as.number = val;
-  }
-
-  inline Value(Obj* obj) {
-    type = VAL_OBJ;
-    as.obj = obj;
-  }
+  Value(const Value& rhs);
+  Value(ValueType type = VAL_NULL);
+  Value(bool val);
+  Value(NumberType val);
+  Value(Obj* obj);
 
  public:
-  inline bool AsBool() const { return as.boolean; }
-  inline NumberType AsNumber() const { return as.number; }
-  inline struct Obj* AsObj() const { return as.obj; }
-  inline ObjString* AsString() const { return (ObjString*)as.obj; }
+  bool AsBool() const;
+  NumberType AsNumber() const;
+  struct Obj* AsObj() const;
+  ObjString* AsString() const;
 
-  inline bool IsType(ValueType expected_type) const { return type == expected_type; }
+  bool IsType(ValueType expected_type) const;
   bool IsString() const;
   bool IsFalse() const;
 

@@ -22,8 +22,8 @@ ff supports REPL mode as well as passing a source file.
  - [X] `while` statement.
  - [X] `for` statement.
  - [X] `break` and `continue` keywords.
- - [ ] Functions, declared with `fn` keyword.
- - [ ] Native functions with suitable api.
+ - [X] Functions, declared with `fn` keyword.
+ - [X] Native functions with suitable api.
  - [ ] Anonimous functions (lambdas)
  - [ ] Classes and instances.
  - [ ] Arrays and lists. (either like native classes or like separate obj types)

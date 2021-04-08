@@ -8,6 +8,9 @@
 #include "debug/disasm.h"
 #include "utils/abi.h"
 
+/* stdlib */
+#include "stdlib/io.h"
+
 
 VM* current = nullptr;
 
@@ -17,26 +20,61 @@ void SetCurrent(VM* vm) {
 }
 
 
-
-VM::VM() : chunk_(nullptr), ip_(nullptr) {
-  ResetStack();
+VM::VM() {
+  ResetStack();  
 }
 
 
 VM::~VM() {}
 
 
+void VM::InitBuiltins() {
+  DefineNative("println", builtin_println);
+}
+
+
+void VM::DefineNative(const char* name, NativeFn function) {
+  std::string name_str(name);
+  Push(ObjString::FromStr(name_str)->AsValue());
+  Push(ObjNative::New(function));
+  globals_[(ObjString*)(stack_[0].AsObj())] = stack_[1];
+  Pop();
+  Pop();
+}
+
+
 void VM::RuntimeError(const char* fmt, ...) {
   va_list args;
   va_start(args, fmt);
 
-  size_t offset = ip_ - chunk_->code.data() - 1;
-  fprintf(stderr, "[line %d] RuntimeError: ", chunk_->GetLine(offset));
+  CallFrame* frame = &frames_[frame_count_ - 1];
+  size_t offset = frame->ip - frame->function->chunk.code.data() - 1;
+  fprintf(stderr, "[line %d] RuntimeError: ", frame->function->chunk.GetLine(offset));
   vfprintf(stderr, fmt, args);
   fputs("\n", stderr);
 
   va_end(args);
   ResetStack();
+}
+
+
+void VM::StackTrace() {
+  for (int i = frame_count_ - 1; i >= 0; i--) {
+    CallFrame* stack_frame = &frames_[i];
+    ObjFunction* function = stack_frame->function;
+    size_t instruction = stack_frame->ip - function->chunk.code.data() - 1;
+    fprintf(stderr, "[line %d] in ", function->chunk.GetLine(instruction));
+    if (function->name == nullptr) {
+      fprintf(stderr, "script\n");
+    } else {
+      fprintf(stderr, "%s()", function->name->str.c_str());
+    }
+  }
+}
+
+
+uint8_t VM::ReadByte() {
+  return *frame->ip++;
 }
 
 
@@ -48,20 +86,95 @@ uint16_t VM::ReadShort() {
 }
 
 
+Value VM::ReadConstant() {
+  return frame->function->chunk.constants[ReadByte()];
+}
+
+
 Value VM::ReadConstantLong() {
   abi::NumericData idx;
   idx.u8[0] = ReadByte();
   idx.u8[1] = ReadByte();
   idx.u8[2] = ReadByte();
   idx.u8[3] = ReadByte();
-  return chunk_->constants[idx.i32];
+  return frame->function->chunk.constants[idx.i32];
+}
+
+
+void VM::ResetStack() {
+  stack_top_ = stack_;
+  frame_count_ = 0;
+} 
+
+
+void VM::Push(Value value) {
+  *stack_top_ = value;
+  stack_top_++;
+}
+
+
+Value VM::Pop() {
+  stack_top_--;
+  return *stack_top_;
+}
+
+
+Value VM::Peek(int distance) const {
+  return stack_top_[-1 - distance];
+}
+
+
+bool VM::CallValue(Value callee, int arg_count) {
+  if (callee.IsType(VAL_OBJ)) {
+    switch (callee.AsObj()->type) {
+      case OBJ_NATIVE: {
+        ObjNative* native = (ObjNative*)(callee.AsObj());
+        NativeFn func = native->function;
+        Value result = func(arg_count, stack_top_ - arg_count);
+        stack_top_ -= arg_count - 1;
+        Push(result);
+        return true;
+      }
+      case OBJ_FUNCTION: {
+        return Call((ObjFunction*)(callee.AsObj()), arg_count);
+      default:
+        break;
+      }
+    }
+  }
+
+  RuntimeError("Can only call functions.");
+  return false;
+}
+
+
+bool VM::Call(ObjFunction* function, int arg_count) {
+  if (arg_count != function->arity) {
+    RuntimeError("Expected %d arguments, but got %d.", function->arity, arg_count);
+    return false;
+  }
+
+  if (frame_count_ == kFramesMax) {
+    RuntimeError("Stack overflow.");
+    return false;
+  }
+
+  CallFrame* function_frame = &frames_[frame_count_++];
+
+  function_frame->function = function;
+  function_frame->ip = function->chunk.code.data();
+  function_frame->slots = stack_top_ - arg_count - 1;
+
+  return true;
 }
 
 
 InterpretResult VM::Run() {
   for (;;) {
+    frame = &frames_[frame_count_ - 1];
+
 #ifdef _DEBUG_EXECUTION_TRACING
-    debug::DisassembleInstruction(*chunk_, (int)(ip_ - chunk_->code.data()));
+    debug::DisassembleInstruction(frame->function->chunk, (int)(frame->ip - frame->function->chunk.code.data()));
 #endif
 #ifdef _DEBUG_TRACE_STACK
     for (Value* slot = stack_; slot < stack_top_; slot++) {
@@ -150,7 +263,7 @@ InterpretResult VM::Run() {
       }
       case OP_GET_LOCAL: {
         uint8_t slot = ReadByte();
-        Push(stack_[slot]);
+        Push(frame->slots[slot]);
         break;
       }
       case OP_SET_LOCAL: {
@@ -159,7 +272,7 @@ InterpretResult VM::Run() {
           RuntimeError("Cant assign to const variable.");
           return InterpretResult::kRuntimeError;
         }
-        stack_[slot] = Peek(0);
+        frame->slots[slot] = Peek(0);
         break;
       }
       case OP_MAKECONST: {
@@ -253,17 +366,17 @@ InterpretResult VM::Run() {
       }
       case OP_JUMP: {
         uint16_t offset = ReadShort();
-        ip_ += offset;
+        frame->ip += offset;
         break;
       }
       case OP_JUMP_IF_FALSE: {
         uint16_t offset = ReadShort();
-        if (Peek(0).IsFalse()) ip_ += offset;
+        if (Peek(0).IsFalse()) frame->ip += offset;
         break;
       }
       case OP_LOOP: {
         uint16_t offset = ReadShort();
-        ip_ -= offset;
+        frame->ip -= offset;
         break;
       }
       case OP_PRINT: {
@@ -271,24 +384,40 @@ InterpretResult VM::Run() {
         std::cout << std::endl;
         break;
       }
+      case OP_CALL: {
+        int arg_count = ReadByte();
+        if (!CallValue(Peek(arg_count), arg_count)) {
+          return InterpretResult::kRuntimeError;
+        }
+        frame = &frames_[frame_count_ - 1];
+        break;
+      }
       case OP_RETURN: {
-        return InterpretResult::kOk;
+        Value result = Pop();
+
+        frame_count_--;
+        if (frame_count_ == 0) {
+          Pop();
+          return InterpretResult::kOk;
+        }
+
+        stack_top_ = frame->slots;
+        Push(result);
+
+        frame = &frames_[frame_count_ - 1];
+        break;
       }
     }
   }
 }
 
 InterpretResult VM::Interpret(std::string& source) {
-  Chunk chunk;
   Compiler compiler(source);
+  ObjFunction* function = compiler.Compile();
+  if (!function) return InterpretResult::kCompileError;
 
-  if (!compiler.Compile(&chunk)) {
-    return InterpretResult::kCompileError;
-  }
-
-  this->chunk_ = &chunk;
-  this->ip_ = chunk.code.data();
-  
+  Push(function->AsValue());
+  CallValue(function->AsValue(), 0);
   return Run();
 }
 

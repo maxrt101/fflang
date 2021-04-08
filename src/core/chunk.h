@@ -35,6 +35,7 @@ enum OpCode : uint8_t {
   OP_JUMP_IF_FALSE,
   OP_LOOP,
   OP_PRINT,
+  OP_CALL,
   OP_RETURN,
 };
 
@@ -48,10 +49,12 @@ class Chunk {
  
  public:
   std::vector<uint8_t> code;
-  ValueArray constants;
+  std::vector<Value> constants;
   std::vector<LineInfo> lines;
 
  public:
+  Chunk();
+
   void AppendCode(uint8_t byte, int line = -1);
   int AddConstant(Value value);
   void WriteConstant(Value value, int line = -1);

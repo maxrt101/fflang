@@ -14,11 +14,14 @@ static constexpr size_t kMaxLongConstant = math::ConstexprPow(2, 32);
 
 static CompilerState* current_state = nullptr;
 
+static Chunk* CurrentChunk() {
+  return &current_state->function->chunk;
+}
 
 
 /** TODO: make const */
 ParseRule rules[] = {
-  [TOKEN_LEFT_PAREN]    = {&Compiler::Grouping, NULL,               PREC_NONE},
+  [TOKEN_LEFT_PAREN]    = {&Compiler::Grouping, &Compiler::Call,    PREC_CALL},
   [TOKEN_RIGHT_PAREN]   = {NULL,                NULL,               PREC_NONE},
   [TOKEN_LEFT_BRACE]    = {NULL,                NULL,               PREC_NONE},
   [TOKEN_RIGHT_BRACE]   = {NULL,                NULL,               PREC_NONE},
@@ -61,12 +64,45 @@ ParseRule rules[] = {
 };
 
 
-CompilerState::CompilerState() : local_count(0), scope_depth(0) {
+CompilerState::CompilerState(FunctionType type, std::string name)
+    : local_count(0), scope_depth(0), type(type) {
+  function = ObjFunction::New();
+
+  if (type != TYPE_SCRIPT) {
+    function->name = ObjString::FromStr(name);
+  }
+
+  Local* local = &locals[local_count++];
+  local->depth = 0;
+  local->name.str = "";
+
+  enclosing = current_state;
   current_state = this;
 }
 
 
+ObjFunction* CompilerState::End(Compiler* compiler) {
+  compiler->EndCompilation();
+#ifdef _DEBUG_DUMP_COMPILED
+  if (compiler->HadError())
+    debug::DisassembleChunk(*CurrentChunk(), function->name ? function->name->str : "<script>");
+#endif
+  current_state = current_state->enclosing;
+  return function;
+}
+
+
 Compiler::Compiler(std::string& source) : scanner_(source) {}
+
+
+bool Compiler::HadError() const {
+  return had_error_;
+}
+
+
+void Compiler::EndCompilation() {
+  EmitReturn();
+}
 
 
 void Compiler::Advance() {
@@ -155,7 +191,7 @@ void Compiler::Syncronize() {
 
 
 void Compiler::EmitByte(uint8_t byte) {
-  current_chunk_->AppendCode(byte, previous_.line);
+  CurrentChunk()->AppendCode(byte, previous_.line);
 }
 
 
@@ -166,6 +202,7 @@ void Compiler::EmitBytes(uint8_t byte1, uint8_t byte2) {
 
 
 void Compiler::EmitReturn() {
+  EmitByte(OP_NULL);
   EmitByte(OP_RETURN);
 }
 
@@ -173,12 +210,12 @@ void Compiler::EmitReturn() {
 int Compiler::EmitJump(uint8_t op) {
   EmitByte(op);
   EmitBytes(0xff, 0xff);
-  return current_chunk_->code.size() - 2;
+  return CurrentChunk()->code.size() - 2;
 }
 
 
 void Compiler::PatchJump(int offset) {
-  int jump = current_chunk_->code.size() - offset - 2;
+  int jump = CurrentChunk()->code.size() - offset - 2;
 
   abi::NumericData data;
   
@@ -188,15 +225,15 @@ void Compiler::PatchJump(int offset) {
 
   data.u16[0] = jump;
 
-  current_chunk_->code[offset] = data.u8[0]; //(jump >> 8) & 0xff;
-  current_chunk_->code[offset+1] = data.u8[1]; //jump & 0xff;
+  CurrentChunk()->code[offset] = data.u8[0]; //(jump >> 8) & 0xff;
+  CurrentChunk()->code[offset+1] = data.u8[1]; //jump & 0xff;
 }
 
 
 void Compiler::EmitLoop(int loop_start) {
   EmitByte(OP_LOOP);
 
-  int offset = current_chunk_->code.size() - loop_start + 2;
+  int offset = CurrentChunk()->code.size() - loop_start + 2;
   if (offset > UINT16_MAX) {
     Error("Loop body too large");
   }
@@ -216,8 +253,8 @@ void Compiler::PatchRemoteJump(int loop, int offset) {
 
   abi::NumericData data;
   data.u16[0] = offset;
-  current_chunk_->code[loop] = data.u8[0];
-  current_chunk_->code[loop+1] = data.u8[1];
+  CurrentChunk()->code[loop] = data.u8[0];
+  CurrentChunk()->code[loop+1] = data.u8[1];
 }
 
 
@@ -243,7 +280,7 @@ void Compiler::EmitConstant(Value value) {
 
 
 int Compiler::MakeConstant(Value value) {
-  int constant = current_chunk_->AddConstant(value);
+  int constant = CurrentChunk()->AddConstant(value);
   if (constant > kMaxLongConstant) {
       Error("Too many constant in one chunk.");
       return 0;
@@ -263,7 +300,8 @@ int Compiler::ParseVariable(const char* err_msg) {
 
 
 int Compiler::IdentifierConstant(Token* name) {
-  return MakeConstant(ObjString::FromStr(name->str)->AsValue());
+  ObjString* str = ObjString::FromStr(name->str);
+  return MakeConstant(str->AsValue());
 }
 
 
@@ -348,12 +386,25 @@ int Compiler::ResolveLocal(CompilerState* state, Token* name) {
 
 
 void Compiler::MarkInitialized() {
+  if (current_state->scope_depth == 0) return;
   current_state->locals[current_state->local_count - 1].depth = current_state->scope_depth;
 }
 
 
-void Compiler::EndCompiling() {
-  EmitReturn();
+uint8_t Compiler::ArgumentList() {
+  uint8_t arg_count = 0;
+  if (!Check(TOKEN_RIGHT_PAREN)) {
+    do {
+      Expression();
+      if (arg_count == 255) {
+        Error("Can't have more than 255 arguments.");
+      }
+      arg_count++;
+    } while (Match(TOKEN_COMMA));
+  }
+
+  Consume(TOKEN_RIGHT_PAREN, "Expected ')' after function arguments.");
+  return arg_count;
 }
 
 
@@ -421,6 +472,8 @@ void Compiler::Declaration() {
     VarDeclaration(true);
   } else if (Match(TOKEN_CONST)) {
     VarDeclaration(false);
+  } else if (Match(TOKEN_FN)) {
+    FnDeclaration();
   } else {
     Statement();
   }
@@ -443,6 +496,14 @@ void Compiler::VarDeclaration(bool assignable) {
 }
 
 
+void Compiler::FnDeclaration() {
+  int global = ParseVariable("Expected function name.");
+  MarkInitialized();
+  Function(TYPE_FUNCTION);
+  DefineVariable(global, true);
+}
+
+
 void Compiler::Statement() {
   if (Match(TOKEN_LEFT_BRACE)) {
     BeginScope();
@@ -458,6 +519,8 @@ void Compiler::Statement() {
     BreakStatement();
   } else if (Match(TOKEN_CONTINUE)) {
     ContinueStatement();
+  } else if (Match(TOKEN_RETURN)) {
+    ReturnStatement();
   } else if (Match(TOKEN_PRINT)) {
     PrintStatement();
   } else {
@@ -502,7 +565,7 @@ void Compiler::IfStatement() {
 
 
 void Compiler::WhileStatement() {
-  int loop_start = current_chunk_->code.size();
+  int loop_start = CurrentChunk()->code.size();
 
   Consume(TOKEN_LEFT_PAREN, "Expected '(' after 'while'.");
   Expression();
@@ -548,7 +611,7 @@ void Compiler::ForStatement() {
     ExpressionStatement();
   }
 
-  int loop_start = current_chunk_->code.size();
+  int loop_start = CurrentChunk()->code.size();
 
   int exit_jump = -1;
   if (!Match(TOKEN_SEMICOLON)) {
@@ -562,7 +625,7 @@ void Compiler::ForStatement() {
   if (!Match(TOKEN_RIGHT_PAREN)) {
     int body_jump = EmitJump(OP_JUMP);
     
-    int increment_start = current_chunk_->code.size();
+    int increment_start = CurrentChunk()->code.size();
     Expression();
     EmitByte(OP_POP);
     Consume(TOKEN_RIGHT_PAREN, "Expected ')' after 'for' increment.");
@@ -598,7 +661,7 @@ void Compiler::ForStatement() {
 
 
 void Compiler::BreakStatement() {
-  // check for Number for nested break
+  // TODO: check for Number for nested break
   Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
   int jump = EmitJump(OP_JUMP);
   GetLoop().end_jump.push_back(jump);
@@ -609,6 +672,48 @@ void Compiler::ContinueStatement() {
   Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
   int jump = EmitJump(OP_LOOP);
   GetLoop().start_jump.push_back(jump);
+}
+
+
+void Compiler::ReturnStatement() {
+  if (current_state->type == TYPE_SCRIPT) {
+    Error("Can't return from top-level code.");
+  }
+  if (Match(TOKEN_SEMICOLON)) {
+    EmitReturn();
+  } else {
+    Expression();
+    Consume(TOKEN_SEMICOLON, "Expected ';' after return value.");
+    EmitByte(OP_RETURN);
+  }
+}
+
+
+void Compiler::Function(FunctionType type) {
+  CompilerState f_state(type, previous_.str); // function_state
+  
+  BeginScope();
+
+  Consume(TOKEN_LEFT_PAREN, "Expected '(' after function name.");
+  if (!Check(TOKEN_RIGHT_PAREN)) {
+    do {
+      current_state->function->arity++;
+      if (current_state->function->arity > 255) {
+        ErrorAtCurrent("Can't have more than 255 parameters.");
+      }
+
+      int param_constant = ParseVariable("Expected parameter name.");
+      DefineVariable(param_constant, true);
+    } while (Match(TOKEN_COMMA));
+  }
+  Consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameter declaration.");
+
+  Consume(TOKEN_LEFT_BRACE, "Expected '{' before function body.");
+  Block();
+
+  ObjFunction* function = f_state.End(this);
+  int constant = MakeConstant(function->AsValue());
+  EmitCheckLong(constant, OP_CONSTANT, OP_CONSTANT_LONG);
 }
 
 
@@ -721,24 +826,25 @@ void Compiler::Or(bool can_assign) {
 }
 
 
-bool Compiler::Compile(Chunk* chunk) {
+void Compiler::Call(bool can_assign) {
+  uint8_t arg_count = ArgumentList();
+  EmitBytes(OP_CALL, arg_count);
+}
+
+
+ObjFunction* Compiler::Compile() {
   had_error_ = false;
   panic_mode_ = false;
 
-  CompilerState c_state;
-  current_chunk_ = chunk;
+  CompilerState c_state(TYPE_SCRIPT, ""); // compiler state
 
   Advance();
   while (!Match(TOKEN_EOF)) {
     Declaration();
   }
-  EndCompiling();
 
-#ifdef _DEBUG_DUMP_COMPILED
-  if (!had_error_)
-    debug::DisassembleChunk(*chunk, "code");
-#endif
+  ObjFunction* function = c_state.End(this);
 
-  return !had_error_;
+  return HadError() ? nullptr : function;
 }
 

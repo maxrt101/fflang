@@ -16,6 +16,7 @@ constexpr auto kReplPrompt = "> ";
 static void Repl() {
   VM vm;
   SetCurrent(&vm);
+  vm.InitBuiltins();
   char* buffer = NULL;
   printf("FF v%s\n", kVersionString);
 
@@ -38,6 +39,7 @@ static void RunFile(std::string filename) {
   std::string source = buffer.str();
   VM vm;
   SetCurrent(&vm);
+  vm.InitBuiltins();
 
   InterpretResult result = vm.Interpret(source);
   if (result == InterpretResult::kCompileError) die(65);

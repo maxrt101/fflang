@@ -8,8 +8,34 @@
 extern VM* current;
 
 
+std::string Obj::ToString() const {
+  switch (type) {
+    case OBJ_STRING:
+      return ((ObjString*)this)->str;
+    case OBJ_NATIVE:
+      return "<native fn>";
+    case OBJ_FUNCTION: {
+      ObjFunction* func = (ObjFunction*)this;
+      if (func->name) return "<fn " + func->name->str + ">";
+      return "<script>";
+    }
+    default:
+      return "<object>";
+  }
+}
+
+
+Value Obj::AsValue() {
+  Value val;
+  val.type = VAL_OBJ;
+  val.as.obj = this;
+  return val;
+}
+
+
 ObjString* ObjString::New() {
   ObjString* obj = memory::Reallocate<ObjString>(nullptr, 1);
+  new (obj) ObjString();
   obj->type = OBJ_STRING;
   return obj;
 }
@@ -31,17 +57,22 @@ ObjString* ObjString::FromStr(std::string& str) {
 }
 
 
-Value Obj::AsValue() {
-  return Value(this);
+ObjFunction::ObjFunction() {
+  type = OBJ_FUNCTION;
 }
 
 
-std::string Obj::ToString() const {
-  switch (type) {
-    case OBJ_STRING:
-      return ((ObjString*)this)->str;
-    default:
-      return "<object>";
-  }
+ObjFunction* ObjFunction::New() {
+  ObjFunction* obj = memory::Reallocate<ObjFunction>(nullptr, 1);
+  new (obj) ObjFunction();
+  return obj;
+}
+
+ObjNative* ObjNative::New(NativeFn func) {
+  ObjNative* obj = memory::Reallocate<ObjNative>(nullptr, 1);
+  new (obj) ObjNative();
+  obj->type = OBJ_NATIVE;
+  obj->function = func;
+  return obj;
 }
 

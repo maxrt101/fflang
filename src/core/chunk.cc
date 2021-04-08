@@ -2,9 +2,18 @@
 #include "utils/abi.h"
 
 #include <algorithm>
+#include <iostream>
+
+
+Chunk::Chunk() {
+  //constants.push_back(Value(VAL_NULL));
+}
+
 
 void Chunk::AppendCode(uint8_t byte, int line) {
+  //std::cout << "Before push: " << (int)byte << " " << line << " " << code.size() << " " << &code << "\n";
   code.push_back(byte);
+
   if (line == -1) // Means the same line as in the instruction before
     return;
   if (lines.size() == 0) {
@@ -17,6 +26,13 @@ void Chunk::AppendCode(uint8_t byte, int line) {
 }
 
 int Chunk::AddConstant(Value value) {
+  /*std::cout << "AddConstant: " << constants.data() << " " << &value << "\n";
+  std::cout << "constants.size(): " << constants.size() << std::endl;
+  for (int i = 0; i < constants.size(); i++) {
+    std::cout << i << ": " << std::endl; //<< constants[i].ToString() << "\n";
+    std::cout << &constants[i] << " " << std::endl;
+    std::cout << (int)constants[i].type << " " << std::endl;
+  }*/
   auto itr = std::find(constants.begin(), constants.end(), value);
   if (itr == constants.end()) {
     constants.push_back(value);

@@ -1,0 +1,25 @@
+fn add(a, b) {
+  return a + b;
+}
+
+print add(10, 20) == 30;
+
+
+fn retval(i) {
+  if (i == 1) {
+    return 100;
+  } else if (i == 2) {
+    return "string";
+  } else if (i == 3) {
+    return true;
+  } else if (i == 4) {
+    return false;
+  } else {
+    return null;
+  }
+}
+
+for (var i = 0; i < 6; i=i+1) {
+  print retval(i);
+}
+

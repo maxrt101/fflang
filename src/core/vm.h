@@ -6,6 +6,7 @@
 
 #include "core/chunk.h"
 #include "core/value.h"
+#include "core/object.h"
 #include "core/config.h"
 
 
@@ -16,12 +17,22 @@ enum class InterpretResult {
 };
 
 
+struct CallFrame {
+  ObjFunction* function;
+  uint8_t* ip;
+  Value* slots;
+};
+
+
 class VM {
  private:
-  Chunk* chunk_;
-  const uint8_t* ip_; // Chunk will remain unchanged, so this shouldn't be a problem
   Value stack_[kStackMaxSize];
   Value* stack_top_;
+
+  CallFrame frames_[kFramesMax];
+  int frame_count_;
+  CallFrame* frame = nullptr;
+
   std::unordered_map<ObjString*, Value> globals_;
 
  public:
@@ -32,20 +43,27 @@ class VM {
   ~VM();
 
   InterpretResult Interpret(std::string& source);
+  void InitBuiltins();
+  void DefineNative(const char* name, NativeFn function);
 
  private:
-  inline uint8_t ReadByte() { return *ip_++; }
+  void RuntimeError(const char* fmt, ...);
+  void StackTrace();
+
+ private:
+  uint8_t ReadByte();
   uint16_t ReadShort();
   
-  inline Value ReadConstant() { return chunk_->constants[ReadByte()]; }
+  Value ReadConstant();
   Value ReadConstantLong();
 
-  inline void ResetStack()              { stack_top_ = stack_; }
-  inline void Push(Value value)         { *stack_top_ = value; stack_top_++; }
-  inline Value Pop()                    { stack_top_--; return *stack_top_; }
-  inline Value Peek(int distance) const { return stack_top_[-1 - distance]; }
+  void ResetStack();
+  void Push(Value value);
+  Value Pop();
+  Value Peek(int distance) const;
 
-  void RuntimeError(const char* fmt, ...);
+  bool CallValue(Value callee, int arg_count);;
+  bool Call(ObjFunction* function, int arg_count);
 
  private:
   InterpretResult Run();

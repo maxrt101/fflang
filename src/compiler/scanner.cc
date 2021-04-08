@@ -112,7 +112,7 @@ Token Scanner::Number() {
 
 
 Token Scanner::Identifier() {
-  while (isalpha(Peek()) || isdigit(Peek())) Advance();
+  while (isalpha(Peek()) || isdigit(Peek()) || Peek() == '_') Advance();
 
   return MakeToken(IdentifierType());
 }
@@ -132,8 +132,8 @@ TokenType Scanner::IdentifierType() const {
                 case 'n': {
                   if (current_ - start_ > 3) {
                     switch (start_[3]) {
-                      case 's': return CheckKeyword(2, 2, "t", TOKEN_CONST);
-                      case 't': return CheckKeyword(2, 4, "inue", TOKEN_CONTINUE);
+                      case 's': return CheckKeyword(4, 1, "t", TOKEN_CONST);
+                      case 't': return CheckKeyword(4, 4, "inue", TOKEN_CONTINUE);
                     }
                   }
                 }

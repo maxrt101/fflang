@@ -5,6 +5,7 @@
 #include <string>
 
 #include "core/chunk.h"
+#include "core/object.h"
 #include "core/config.h"
 #include "compiler/scanner.h"
 
@@ -23,27 +24,24 @@ enum Precedence{
   PREC_PRIMARY
 };
 
+struct ParseRule;
+struct CompilerState;
+
 struct Local {
   Token name;
   int depth;
 };
 
-
-struct CompilerState {
-  Local locals[kLocalsSize];
-  int local_count;
-  int scope_depth;
-
-  CompilerState();
+enum FunctionType {
+  TYPE_FUNCTION,
+  TYPE_SCRIPT,
 };
-
-
-struct ParseRule;
 
 struct LoopRecord {
   std::vector<int> start_jump;
   std::vector<int> end_jump;
 };
+
 
 class Compiler {
  private:
@@ -52,12 +50,13 @@ class Compiler {
   Token previous_;
   bool had_error_;
   bool panic_mode_;
-  Chunk* current_chunk_;
   std::vector<LoopRecord> loops_;
 
  public:
   Compiler(std::string& source);
-  bool Compile(Chunk* chunk);
+  ObjFunction* Compile();
+  bool HadError() const;
+  void EndCompilation();
 
  private:
   void Advance();
@@ -90,8 +89,7 @@ class Compiler {
   void AddLocal(Token name);
   int  ResolveLocal(CompilerState* state, Token* name);
   void MarkInitialized();
-
-  void EndCompiling();
+  uint8_t ArgumentList();
 
   void BeginScope();
   void EndScope();
@@ -113,12 +111,14 @@ class Compiler {
   void Variable(bool can_assign);
   void And(bool can_assign);
   void Or(bool can_assign);
+  void Call(bool can_assign);
  
  private:
   void Declaration();
   void Statement();
   void Expression();
   void VarDeclaration(bool assignable);
+  void FnDeclaration();
   void ExpressionStatement();
   void PrintStatement();
   void Block();
@@ -127,14 +127,35 @@ class Compiler {
   void ForStatement();
   void BreakStatement();
   void ContinueStatement();
+  void ReturnStatement();
+
+  void Function(FunctionType type);
 };
 
+
 typedef void (Compiler::*ParseFn)(bool);
+
 
 struct ParseRule {
   ParseFn prefix;
   ParseFn infix;
   Precedence precedence;
+};
+
+
+struct CompilerState {
+  CompilerState* enclosing;
+
+  ObjFunction* function;
+  FunctionType type;
+
+  Local locals[kLocalsSize];
+  int local_count;
+  int scope_depth;
+
+ public:
+  CompilerState(FunctionType type, std::string name);
+  ObjFunction* End(Compiler* compiler);
 };
 
 #endif
