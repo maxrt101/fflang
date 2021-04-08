@@ -19,11 +19,9 @@ Consts are immutable variables. Declared with `const` keyword.
 User defined functions are supported. They can be defined with `fn` keyword.  
 
 ## Extending the capabilities
-Native C/C++ functions are supported. All native functions must return `Value`  
-and take `(int, Value*)` as parameters. Where the first parameter is typically  
-called `argc` for argument count, and the second - `args` for arguments.  
-Each function must return something, if you don't have anything to return,  
-just return `null` with `Value(VAL_NULL)`.
+Native C/C++ functions are supported. All native functions must return `Value` and take `(int, Value*)` as parameters.
+Where the first parameter is typically called `argc` for argument count, and the second - `args` for arguments.
+Each function must return something, if you don't have anything to return, just return `null` with `Value(VAL_NULL)`.
 
 ## Supported features
  - [X] Integral data types: `Null`, `Bool`, `Number`.
