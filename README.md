@@ -49,17 +49,9 @@ just return `null` with `Value(VAL_NULL)`.
  - [ ] Async functions
 
 ## Internal works
-You can see what the vm is doing by compiling ff with `make debug`.  
-This implementation is divided in 2 parts: compiler and vm.  
-Compiler parses input, and spits out a `Chunk`. `Chunk` contains  
-bytecode and constants array. Each function has it's own `Chunk`.  
-The top-level code lives in an implicit `Chunk` called `<script>`  
-The vm runs the `Chunk` that compiler gives it.  
-FF vm is stack based, and stack frames are of `Value` type.  
-FF has a clear distinction between `Value` and `Object`.  
-`Value` can store integral types (`Null`, `Number`, 'Bool')  
-and an `Object`. `Object`s are allocated on the heap.  
-Strings and functions are a good exaple of an `Object`.  
-Strings are represented with `ObjString` object, and functions  
-with `ObjFunction`.  
-
+You can see what the vm is doing by compiling ff with `make debug`. This implementation is divided in 2 parts: compiler and vm.
+Compiler parses input, and spits out a `Chunk`. `Chunk` contains bytecode and constants array. Each function has it's own `Chunk` 
+The top-level code lives in an implicit `Chunk` called `<script>` The vm runs the `Chunk` that compiler gives it.
+FF vm is stack based, and stack frames are of `Value` type. FF has a clear distinction between `Value` and `Object`.
+`Value` can store integral types (`Null`, `Number`, `Bool`) and an `Object`. `Object`s are allocated on the heap.Strings
+and functions are a good exaple of an `Object`. Strings are represented with `ObjString` object, and functions with `ObjFunction`.
