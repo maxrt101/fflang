@@ -37,6 +37,7 @@ void VM::DefineNative(const char* name, NativeFn function) {
   std::string name_str(name);
   Push(ObjString::FromStr(name_str)->AsValue());
   Push(ObjNative::New(function));
+  stack_[1].assignable = false;
   globals_[(ObjString*)(stack_[0].AsObj())] = stack_[1];
   Pop();
   Pop();
@@ -131,7 +132,7 @@ bool VM::CallValue(Value callee, int arg_count) {
         ObjNative* native = (ObjNative*)(callee.AsObj());
         NativeFn func = native->function;
         Value result = func(arg_count, stack_top_ - arg_count);
-        stack_top_ -= arg_count - 1;
+        stack_top_ -= arg_count + 1;
         Push(result);
         return true;
       }
@@ -176,7 +177,17 @@ InterpretResult VM::Run() {
 #ifdef _DEBUG_EXECUTION_TRACING
     debug::DisassembleInstruction(frame->function->chunk, (int)(frame->ip - frame->function->chunk.code.data()));
 #endif
-#ifdef _DEBUG_TRACE_STACK
+
+#ifdef _DEBUG_STEP
+    int ch = getchar();
+    if (ch == 'h') {
+      printf("h - help  q - quit  s - stack  g - globals  t - trace");
+    } else if (ch == 'q') {
+      ResetStack();
+      return InterpretResult::kOk;
+    } else if (ch == 's') {
+#endif
+#if defined(_DEBUG_TRACE_STACK) || defined(_DEBUG_STEP)
     for (Value* slot = stack_; slot < stack_top_; slot++) {
       printf("[ ");
       slot->Print();
@@ -184,6 +195,19 @@ InterpretResult VM::Run() {
     }
     printf("\n");
 #endif
+#ifdef _DEBUG_STEP
+    } else if ('g') {
+      printf("globals:\n");
+      for (auto &p : globals_) {
+        std::cout << p.first->str << ": " << p.second.ToString() << "\n";
+      }
+    } else if (ch == 't') {
+      StackTrace();
+    }
+    printf("\n");
+#endif
+
+
 
     uint8_t instruction = ReadByte();
     switch (instruction) {
@@ -320,16 +344,19 @@ InterpretResult VM::Run() {
         if (Peek(0).IsString() && Peek(1).IsString()) {
           std::string b = Pop().AsString()->str;
           std::string a = Pop().AsString()->str;
-          std::cout << "OP_ADD: '" << a << "' '" << b << "'\n";
           std::string s = a + b;
-          std::cout << "s: '" << s << "'\n";
           Push(Value(ObjString::FromStr(s)->AsObj()));
-        } else if (Peek(0).IsType(VAL_NUMBER) && Peek(1).IsType(VAL_NUMBER)) {
+        } else if (Peek(0).IsNumber() && Peek(1).IsNumber()) {
           Value b = Pop();
           Value a = Pop();
           Push(Value(a.AsNumber()+b.AsNumber()));
+        } else if (Peek(0).IsNumber() && Peek(1).IsString()) { 
+          NumberType b = Pop().AsNumber();
+          std::string a = Pop().AsString()->str;
+          std::string s = a + std::to_string(b);
+          Push(Value(ObjString::FromStr(s)->AsObj()));
         } else {
-          RuntimeError("Operands must be numbers.");
+          RuntimeError("Operands must be numbers or strings.");
           return InterpretResult::kRuntimeError;
         }
         break;

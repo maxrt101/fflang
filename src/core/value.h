@@ -42,6 +42,7 @@ struct Value {
   ObjString* AsString() const;
 
   bool IsType(ValueType expected_type) const;
+  bool IsNumber() const;
   bool IsString() const;
   bool IsFalse() const;
 

@@ -53,7 +53,7 @@ int debug::DisassembleInstruction(const Chunk& chunk, int offset) {
   uint8_t instruction = chunk.code[offset];
   switch (instruction) {
     case OP_RETURN:             return SimpleInstruction("OP_RETURN", offset);
-    case OP_CALL:               return SimpleInstruction("OP_CALL", offset);
+    case OP_CALL:               return ByteInstruction("OP_CALL", chunk, offset);
     case OP_JUMP:               return JumpInstruction("OP_JUMP", 1, chunk, offset);
     case OP_JUMP_IF_FALSE:      return JumpInstruction("OP_JUMP_IF_FALSE", 1, chunk, offset);
     case OP_LOOP:               return JumpInstruction("OP_LOOP", -1, chunk, offset);
@@ -83,7 +83,7 @@ int debug::DisassembleInstruction(const Chunk& chunk, int offset) {
     case OP_MULTIPLY:           return SimpleInstruction("OP_MULTIPLY", offset);
     case OP_DIVIDE:             return SimpleInstruction("OP_DIVIDE", offset);
     default:
-      printf("Unknown opcode: %d", instruction);
+      printf("Unknown opcode: %d\n", instruction);
       return offset+1;
   }
 }

@@ -69,6 +69,11 @@ bool Value::IsType(ValueType expected_type) const {
 }
 
 
+bool Value::IsNumber() const {
+  return type == VAL_NUMBER;
+}
+
+
 bool Value::IsString() const {
   return type == VAL_OBJ && as.obj->type == OBJ_STRING;
 }

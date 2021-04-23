@@ -48,7 +48,7 @@ ParseRule rules[] = {
   [TOKEN_ELSE]          = {NULL,                NULL,               PREC_NONE},
   [TOKEN_FALSE]         = {&Compiler::Literal,  NULL,               PREC_NONE},
   [TOKEN_FOR]           = {NULL,                NULL,               PREC_NONE},
-  [TOKEN_FN]            = {NULL,                NULL,               PREC_NONE}, // &Compiler::Lambda, <PREC_CALL
+  [TOKEN_FN]            = {&Compiler::Lambda,   NULL,               PREC_LAMBDA}, // &Compiler::Lambda, <PREC_CALL
   [TOKEN_IF]            = {NULL,                NULL,               PREC_NONE},
   [TOKEN_NULL]          = {&Compiler::Literal,  NULL,               PREC_NONE},
   [TOKEN_OR]            = {NULL,                &Compiler::Or,      PREC_OR},
@@ -81,8 +81,8 @@ CompilerState::CompilerState(FunctionType type, std::string name)
 }
 
 
-ObjFunction* CompilerState::End(Compiler* compiler) {
-  compiler->EndCompilation();
+ObjFunction* CompilerState::End(Compiler* compiler, bool emit_null_return) {
+  compiler->EndCompilation(emit_null_return);
 #ifdef _DEBUG_DUMP_COMPILED
   if (compiler->HadError())
     debug::DisassembleChunk(*CurrentChunk(), function->name ? function->name->str : "<script>");
@@ -100,8 +100,12 @@ bool Compiler::HadError() const {
 }
 
 
-void Compiler::EndCompilation() {
-  EmitReturn();
+void Compiler::EndCompilation(bool emit_null_return) {
+  if (emit_null_return) {
+    EmitReturn();
+  } else {
+    EmitByte(OP_RETURN);
+  }
 }
 
 
@@ -708,10 +712,17 @@ void Compiler::Function(FunctionType type) {
   }
   Consume(TOKEN_RIGHT_PAREN, "Expected ')' after parameter declaration.");
 
-  Consume(TOKEN_LEFT_BRACE, "Expected '{' before function body.");
-  Block();
+  bool emit_null_return = true;
+  if (Match(TOKEN_RIGHT_ARROW)) {
+    Expression();
+    Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
+    emit_null_return = false;
+  } else {
+    Consume(TOKEN_LEFT_BRACE, "Expected '{' before function body.");
+    Block();
+  }
 
-  ObjFunction* function = f_state.End(this);
+  ObjFunction* function = f_state.End(this, emit_null_return);
   int constant = MakeConstant(function->AsValue());
   EmitCheckLong(constant, OP_CONSTANT, OP_CONSTANT_LONG);
 }
@@ -829,6 +840,11 @@ void Compiler::Or(bool can_assign) {
 void Compiler::Call(bool can_assign) {
   uint8_t arg_count = ArgumentList();
   EmitBytes(OP_CALL, arg_count);
+}
+
+
+void Compiler::Lambda(bool can_assign) {
+  Function(TYPE_LAMBDA);
 }
 
 

@@ -214,13 +214,21 @@ Token Scanner::ScanToken() {
     case ';': return MakeToken(TOKEN_SEMICOLON);
     case ',': return MakeToken(TOKEN_COMMA);
     case '.': return MakeToken(TOKEN_DOT);
-    case '-': return MakeToken(TOKEN_MINUS);
+    case '-': return MakeToken(Match('>') ? TOKEN_RIGHT_ARROW : TOKEN_MINUS);
     case '+': return MakeToken(TOKEN_PLUS);
     case '/': return MakeToken(TOKEN_SLASH);
     case '*': return MakeToken(TOKEN_STAR);
     case '!': return MakeToken(Match('=') ? TOKEN_BANG_EQUAL : TOKEN_BANG);
     case '=': return MakeToken(Match('=') ? TOKEN_EQUAL_EQUAL : TOKEN_EQUAL);
-    case '<': return MakeToken(Match('=') ? TOKEN_LESS_EQUAL : TOKEN_LESS);
+    case '<': {
+      if (Match('-')) {
+        return MakeToken(TOKEN_LEFT_ARROW);
+      }
+      if (Match('=')) {
+        return MakeToken(TOKEN_LESS_EQUAL);
+      }
+      return MakeToken(TOKEN_LESS);
+    }
     case '>': return MakeToken(Match('=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
     case '"': return String();
   }

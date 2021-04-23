@@ -39,7 +39,8 @@ Each function must return something, if you don't have anything to return, just 
  - [X] `break` and `continue` keywords.
  - [X] Functions, declared with `fn` keyword.
  - [X] Native functions with suitable api.
- - [ ] Anonimous functions (lambdas)
+ - [X] Anonimous functions (lambdas)
+ - [X] Shorthand for functions that consist of 1 expression (`->`)
  - [ ] Classes and instances.
  - [ ] Arrays and lists. (either like native classes or like separate obj types)
  - [ ] Standart library

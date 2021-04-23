@@ -20,7 +20,7 @@ enum Precedence{
   PREC_FACTOR,      // * /
   PREC_UNARY,       // ! -
   PREC_CALL,        // . ()
-  // PREC_LAMBDA,      // fn() {}
+  PREC_LAMBDA,      // fn() {}
   PREC_PRIMARY
 };
 
@@ -34,6 +34,7 @@ struct Local {
 
 enum FunctionType {
   TYPE_FUNCTION,
+  TYPE_LAMBDA,
   TYPE_SCRIPT,
 };
 
@@ -56,7 +57,7 @@ class Compiler {
   Compiler(std::string& source);
   ObjFunction* Compile();
   bool HadError() const;
-  void EndCompilation();
+  void EndCompilation(bool emit_null_return = true);
 
  private:
   void Advance();
@@ -112,6 +113,7 @@ class Compiler {
   void And(bool can_assign);
   void Or(bool can_assign);
   void Call(bool can_assign);
+  void Lambda(bool can_assign);
  
  private:
   void Declaration();
@@ -155,7 +157,7 @@ struct CompilerState {
 
  public:
   CompilerState(FunctionType type, std::string name);
-  ObjFunction* End(Compiler* compiler);
+  ObjFunction* End(Compiler* compiler, bool emit_null_return = true);
 };
 
 #endif
