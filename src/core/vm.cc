@@ -8,20 +8,30 @@
 #include "debug/disasm.h"
 #include "utils/abi.h"
 
-/* stdlib */
-#include "stdlib/io.h"
+
+VMContext* current = nullptr;
 
 
-VM* current = nullptr;
-
-
-void SetCurrent(VM* vm) {
-  current = vm;
+void SetCurrent(VM& vm) {
+  current = &vm.this_context;
 }
 
 
-VM::VM() {
-  ResetStack();  
+static Value builtin_import(void* ctx, int argc, Value* args) {
+  VMContext* context = (VMContext*)ctx;
+  if (argc == 1) {
+    if (context && args[0].IsString()) {
+      context->GetHandle()->Import(args[0].AsString());
+    } else {
+      return Value(false);
+    }
+  }
+  return Value(true);
+}
+
+
+VM::VM() : this_context(this) {
+  ResetStack();
 }
 
 
@@ -29,7 +39,7 @@ VM::~VM() {}
 
 
 void VM::InitBuiltins() {
-  DefineNative("println", builtin_println);
+  DefineNative("import", builtin_import);
 }
 
 
@@ -44,18 +54,34 @@ void VM::DefineNative(const char* name, NativeFn function) {
 }
 
 
-void VM::RuntimeError(const char* fmt, ...) {
-  va_list args;
-  va_start(args, fmt);
+void VM::Import(ObjString* name) {
+  modules_.push_back(FFModule(name->str));
+  FFModule& mod = modules_.back();
 
+  auto& symbols = mod.GetAllSymbols();
+  for (auto& symbol : symbols) {
+    std::string str_name = symbol.name;
+    ObjString* symbol_name = ObjString::FromStr(str_name);
+    globals_[symbol_name] = ObjNative::New(symbol.function);
+  }
+}
+
+
+void VM::vRuntimeError(const char* fmt, va_list args) {
   CallFrame* frame = &frames_[frame_count_ - 1];
   size_t offset = frame->ip - frame->function->chunk.code.data() - 1;
   fprintf(stderr, "[line %d] RuntimeError: ", frame->function->chunk.GetLine(offset));
   vfprintf(stderr, fmt, args);
   fputs("\n", stderr);
-
-  va_end(args);
   ResetStack();
+}
+
+
+void VM::RuntimeError(const char* fmt, ...) {
+  va_list args;
+  va_start(args, fmt);
+  vRuntimeError(fmt, args);
+  va_end(args);
 }
 
 
@@ -131,7 +157,7 @@ bool VM::CallValue(Value callee, int arg_count) {
       case OBJ_NATIVE: {
         ObjNative* native = (ObjNative*)(callee.AsObj());
         NativeFn func = native->function;
-        Value result = func(arg_count, stack_top_ - arg_count);
+        Value result = func(current, arg_count, stack_top_ - arg_count);
         stack_top_ -= arg_count + 1;
         Push(result);
         return true;
@@ -447,4 +473,3 @@ InterpretResult VM::Interpret(std::string& source) {
   CallValue(function->AsValue(), 0);
   return Run();
 }
-

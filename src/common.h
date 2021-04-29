@@ -4,5 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#define STRINGIFY(x) #x
+
 #endif
 

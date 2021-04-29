@@ -715,7 +715,7 @@ void Compiler::Function(FunctionType type) {
   bool emit_null_return = true;
   if (Match(TOKEN_RIGHT_ARROW)) {
     Expression();
-    Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
+    // Consume(TOKEN_SEMICOLON, "Expected ';' after expression.");
     emit_null_return = false;
   } else {
     Consume(TOKEN_LEFT_BRACE, "Expected '{' before function body.");

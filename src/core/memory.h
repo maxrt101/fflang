@@ -45,6 +45,11 @@ inline T* Reallocate(T* pointer, size_t new_count) {
   return (T*)result;
 }
 
+template <typename T>
+inline T* Allocate(size_t count) {
+  return Reallocate<T>(nullptr, count);
+}
+
 } // namespace memory
 
 

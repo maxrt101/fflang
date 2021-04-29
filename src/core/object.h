@@ -9,12 +9,14 @@
 
 struct Value;
 
-typedef std::function<Value(int, Value*)> NativeFn;
+//typedef std::function<Value(int, Value*)> NativeFn;
+typedef Value(*NativeFn)(void*, int, Value*);
 
 enum ObjType {
   OBJ_STRING,
   OBJ_NATIVE,
   OBJ_FUNCTION,
+  OBJ_CLOSURE,
 };
 
 
@@ -37,7 +39,7 @@ struct ObjString : public Obj {
   std::string str;
 
  public:
-  static ObjString* FromStr(std::string& str);
+  static ObjString* FromStr(const std::string& str);
   static ObjString* New();
 };
 
@@ -51,6 +53,15 @@ struct ObjFunction : public Obj {
  public:
   ObjFunction();
   static ObjFunction* New();
+};
+
+
+struct ObjClosure : public Obj {
+ public:
+  ObjFunction* function;
+
+ public:
+  static ObjClosure* New(ObjFunction* function);
 };
 
 

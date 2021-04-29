@@ -1,11 +1,11 @@
 #include "core/object.h"
 #include "core/value.h"
 #include "core/memory.h"
-#include "core/vm.h"
+#include "core/api.h"
 
 #include <iostream>
 
-extern VM* current;
+extern VMContext* current;
 
 
 std::string Obj::ToString() const {
@@ -24,7 +24,6 @@ std::string Obj::ToString() const {
   }
 }
 
-
 Value Obj::AsValue() {
   Value val;
   val.type = VAL_OBJ;
@@ -34,24 +33,23 @@ Value Obj::AsValue() {
 
 
 ObjString* ObjString::New() {
-  ObjString* obj = memory::Reallocate<ObjString>(nullptr, 1);
+  ObjString* obj = memory::Allocate<ObjString>(1);
   new (obj) ObjString();
   obj->type = OBJ_STRING;
   return obj;
 }
 
-
-ObjString* ObjString::FromStr(std::string& str) {
+ObjString* ObjString::FromStr(const std::string& str) {
   if (current) {
-    auto interned = current->strings_.find(str);
-    if (interned != current->strings_.end()) {
-      return current->strings_[str];
+    auto interned = current->GetStrings().find(str);
+    if (interned != current->GetStrings().end()) {
+      return current->GetStrings()[str];
     }
   }
   ObjString* obj = ObjString::New();
   obj->str = std::string(str);
   if (current) {
-    current->strings_[str] = obj;
+    current->GetStrings()[str] = obj;
   }
   return obj;
 }
@@ -61,15 +59,20 @@ ObjFunction::ObjFunction() {
   type = OBJ_FUNCTION;
 }
 
-
 ObjFunction* ObjFunction::New() {
-  ObjFunction* obj = memory::Reallocate<ObjFunction>(nullptr, 1);
+  ObjFunction* obj = memory::Allocate<ObjFunction>(1);
   new (obj) ObjFunction();
   return obj;
 }
 
+
+ObjClosure* ObjClosure::New(ObjFunction* function) {
+  //
+}
+
+
 ObjNative* ObjNative::New(NativeFn func) {
-  ObjNative* obj = memory::Reallocate<ObjNative>(nullptr, 1);
+  ObjNative* obj = memory::Allocate<ObjNative>(1);
   new (obj) ObjNative();
   obj->type = OBJ_NATIVE;
   obj->function = func;
